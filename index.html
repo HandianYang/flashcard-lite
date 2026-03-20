@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Random Word Generator</title>
+    <style>
+        /* 重置基本樣式 */
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%; /* 確保高度撐滿螢幕 */
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f8f9fa;
+        }
+
+        /* 核心：Flexbox 完美置中大法 */
+        .container {
+            display: flex;
+            flex-direction: column;   /* 垂直排列 */
+            justify-content: center;  /* 主軸（垂直）置中 */
+            align-items: center;      /* 交叉軸（水平）置中 */
+            height: 100vh;            /* 佔滿整個視窗高度 (Viewport Height) */
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        /* 詞彙顯示區 */
+        #display-area {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 40px;      /* 與按鈕保持距離 */
+            min-height: 3rem;         /* 給定最小高度，防止切換字詞時畫面跳動 */
+            text-align: center;
+            word-break: break-word;   /* 防止字串太長在手機上破版 */
+        }
+
+        /* 陽春但俐落的按鈕 */
+        button {
+            padding: 12px 32px;
+            font-size: 1.2rem;
+            cursor: pointer;
+            background-color: #0366d6;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: background-color 0.2s, transform 0.1s;
+        }
+
+        button:hover { background-color: #005cc5; }
+        button:active { transform: scale(0.96); } /* 點擊時的微小縮放回饋 */
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div id="display-area">請點擊下方按鈕</div>
+        <button id="generate-btn">生成詞彙</button>
+    </div>
+
+    <script>
+        // 1. 自定義詞彙庫 (Library)
+        const vocabulary = [
+            "ArUco Marker", 
+            "OpenCV", 
+            "GitHub Pages", 
+            "Computer Vision", 
+            "Frontend Development",
+            "JavaScript",
+            "Matrix",
+            "Transformation"
+        ];
+
+        // 2. 取得 DOM 元素
+        const displayArea = document.getElementById('display-area');
+        const generateBtn = document.getElementById('generate-btn');
+
+        // 3. 綁定按鈕點擊事件
+        generateBtn.addEventListener('click', () => {
+            // 產生 0 到 array.length - 1 的隨機整數
+            const randomIndex = Math.floor(Math.random() * vocabulary.length);
+            // 替換畫面文字
+            displayArea.textContent = vocabulary[randomIndex];
+        });
+    </script>
+
+</body>
+</html>
