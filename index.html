@@ -1,178 +1,229 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Flashcard Lite</title>
-    <style>
-        body, html {
-            margin: 0; padding: 0; height: 100%;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background-color: #f0f2f5; /* 稍微調深一點背景，凸顯白底卡片 */
-        }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>韓文單字卡 Lite</title>
+  <style>
+    body, html { margin: 0; padding: 0; height: 100%; font-family: -apple-system, sans-serif; background-color: #f0f2f5; }
+    
+    .view-section { display: none; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; box-sizing: border-box; }
+    .view-section.active { display: flex; }
 
-        .container {
-            display: flex; flex-direction: column;
-            justify-content: center; align-items: center;
-            height: 100vh; padding: 20px; box-sizing: border-box;
-        }
-
-        /* --- 3D 翻轉卡片核心 CSS 開始 --- */
-        .scene {
-            width: 320px;
-            height: 200px;
-            perspective: 800px; /* 創造 3D 深度視角 */
-            margin-bottom: 40px;
-        }
-
-        .card {
-            width: 100%; height: 100%;
-            position: relative;
-            transition: transform 0.6s cubic-bezier(0.4, 0.0, 0.2, 1); /* 讓翻轉動畫更自然 */
-            transform-style: preserve-3d; /* 讓子元素保留 3D 空間位置 */
-            cursor: pointer; /* 提示使用者可點擊 */
-        }
-
-        /* 當卡片加上 .is-flipped 類別時，Y軸旋轉 180 度 */
-        .card.is-flipped {
-            transform: rotateY(180deg);
-        }
-
-        /* 卡片的正反兩面共用設定 */
-        .card-face {
-            position: absolute;
-            width: 100%; height: 100%;
-            backface-visibility: hidden; /* 核心：轉到背面時隱藏元素 */
-            display: flex; justify-content: center; align-items: center;
-            border-radius: 16px;
-            box-shadow: 0 8px 16px rgba(0,0,0,0.1);
-            background-color: white;
-            padding: 20px;
-            box-sizing: border-box;
-            text-align: center;
-            word-break: break-word;
-        }
-
-        .card-front {
-            font-size: 2.2rem;
-            font-weight: bold;
-            color: #2c3e50;
-        }
-
-        .card-back {
-            transform: rotateY(180deg); /* 背面一開始就是反的 */
-            font-size: 1.5rem;
-            color: #e74c3c;
-            background-color: #fff9f9; /* 背面給點微小的底色差異 */
-        }
-        /* --- 3D 翻轉卡片核心 CSS 結束 --- */
-
-        button {
-            padding: 14px 36px; font-size: 1.2rem; font-weight: bold;
-            cursor: pointer; background-color: #0366d6; color: white;
-            border: none; border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            transition: all 0.2s;
-        }
-        button:hover { background-color: #005cc5; transform: translateY(-2px); }
-        button:active { transform: translateY(0); }
-        button:disabled { background-color: #95a5a6; cursor: not-allowed; transform: none; }
-    </style>
+    .scene { width: 320px; height: 200px; perspective: 800px; margin-bottom: 40px; }
+    .card { width: 100%; height: 100%; position: relative; transition: transform 0.6s; transform-style: preserve-3d; cursor: pointer; }
+    .card.is-flipped { transform: rotateY(180deg); }
+    .card-face { position: absolute; width: 100%; height: 100%; backface-visibility: hidden; display: flex; justify-content: center; align-items: center; border-radius: 16px; box-shadow: 0 8px 16px rgba(0,0,0,0.1); background-color: white; padding: 20px; box-sizing: border-box; text-align: center; word-break: break-word; }
+    .card-front { font-size: 2.2rem; font-weight: bold; color: #2c3e50; }
+    .card-back { transform: rotateY(180deg); font-size: 1.5rem; color: #e74c3c; background-color: #fff9f9; }
+    
+    button { padding: 10px 24px; font-size: 1rem; cursor: pointer; background-color: #0366d6; color: white; border: none; border-radius: 8px; transition: all 0.2s; margin: 5px; }
+    button:hover { background-color: #005cc5; }
+    button.danger { background-color: #dc3545; }
+    button.danger:hover { background-color: #c82333; }
+    input { padding: 10px; margin: 5px; border: 1px solid #ccc; border-radius: 4px; font-size: 1rem; }
+    
+    .admin-panel { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); width: 100%; max-width: 400px; margin-bottom: 20px;}
+    .word-list { list-style: none; padding: 0; max-height: 300px; overflow-y: auto; }
+    .word-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #eee; }
+    
+    .admin-trigger { position: fixed; bottom: 10px; right: 10px; font-size: 0.9rem; color: #666; cursor: pointer; border: none; background: #e0e0e0; border-radius: 20px; padding: 8px 16px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+    .admin-trigger:hover { background: #d0d0d0; transform: none; }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
-    <div class="container">
-        <div class="scene">
-            <div id="flashcard" class="card">
-                <div id="card-front" class="card-face card-front">請點擊下方按鈕</div>
-                <div id="card-back" class="card-face card-back">這裡會顯示解釋</div>
-            </div>
-        </div>
-        
-        <button id="generate-btn">生成詞彙</button>
+
+  <div id="flashcard-view" class="view-section active">
+    <div class="scene">
+      <div id="flashcard" class="card">
+        <div id="card-front" class="card-face card-front">載入中...</div>
+        <div id="card-back" class="card-face card-back">請稍候</div>
+      </div>
+    </div>
+    <button id="generate-btn">生成詞彙</button>
+    <button id="admin-trigger-btn" class="admin-trigger" onclick="handleAdminTrigger()">⚙️ 管理員登入</button>
+  </div>
+
+  <div id="login-view" class="view-section">
+    <div class="admin-panel">
+      <h3>管理員登入</h3>
+      <p style="font-size: 0.9rem; color: #666;">請輸入管理員通行碼</p>
+      <input type="password" id="password-input" placeholder="6碼通行密碼" style="width: 90%;">
+      <br>
+      <button onclick="handleLogin()">登入</button>
+      <button onclick="switchView('flashcard-view')" style="background-color: #6c757d;">返回</button>
+      <p id="login-msg" style="color: red; font-size: 0.9rem;"></p>
+    </div>
+  </div>
+
+  <div id="admin-view" class="view-section">
+    <div class="admin-panel">
+      <h3>新增韓文單字</h3>
+      <input type="text" id="new-word" placeholder="韓文單字" style="width: 90%;">
+      <input type="text" id="new-meaning" placeholder="中文解釋" style="width: 90%;">
+      <button onclick="handleAddWord()">新增</button>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <div class="admin-panel">
+      <h3>詞彙庫管理</h3>
+      <ul id="word-list" class="word-list">
+        </ul>
+    </div>
+    <div>
+      <button onclick="switchView('flashcard-view')" style="background-color: #6c757d;">返回抽卡</button>
+      <button class="danger" onclick="handleLogout()">登出</button>
+    </div>
+  </div>
 
-    <script>
-        // 1. 初始化 Supabase 客戶端
-        const SUPABASE_URL = 'https://agylibdmnsbswwzburey.supabase.co';
-        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFneWxpYmRtbnNic3d3emJ1cmV5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwNDQ2MDQsImV4cCI6MjA4OTYyMDYwNH0.cpjIyqggU3dv19_gmAs-u5FBW61yTJKENRlTdOB5xU8';
-        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  <script>
+    const SUPABASE_URL = 'https://agylibdmnsbswwzburey.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFneWxpYmRtbnNic3d3emJ1cmV5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwNDQ2MDQsImV4cCI6MjA4OTYyMDYwNH0.cpjIyqggU3dv19_gmAs-u5FBW61yTJKENRlTdOB5xU8'; // 替換為你的 Key
+    const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-        let vocabulary = [];
-        let lastVocabulary = null;
+    let vocabulary = [];
+    let lastVocabulary = null; // 防重複機制變數
+    let isLoggedIn = false;    // 狀態追蹤變數
 
-        const flashcard = document.getElementById('flashcard');
-        const cardFront = document.getElementById('card-front');
-        const cardBack = document.getElementById('card-back');
-        const generateBtn = document.getElementById('generate-btn');
+    // --- 核心：監聽登入狀態 ---
+    supabaseClient.auth.onAuthStateChange((event, session) => {
+      isLoggedIn = !!session; // 將 session 轉為布林值
+      const triggerBtn = document.getElementById('admin-trigger-btn');
+      
+      if (isLoggedIn) {
+        triggerBtn.textContent = "⚙️ 管理詞彙庫";
+      } else {
+        triggerBtn.textContent = "⚙️ 管理員登入";
+      }
+    });
 
-        // 2. 改寫載入資料的函式，改成向 Supabase 要資料
-        async function loadVocabulary() {
-            try {
-                generateBtn.disabled = true;
-                generateBtn.textContent = "連線資料庫中...";
+    // --- 視圖切換與路由邏輯 ---
+    function switchView(viewId) {
+      document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
+      document.getElementById(viewId).classList.add('active');
+      if(viewId === 'admin-view') renderAdminList();
+    }
 
-                // 向 vocabulary 資料表執行 SELECT *
-                const { data, error } = await supabaseClient
-                    .from('Korean_vocabulary')
-                    .select('*');
+    function handleAdminTrigger() {
+      if (isLoggedIn) {
+        switchView('admin-view'); // 已登入：直接進後台，免密碼
+      } else {
+        switchView('login-view'); // 未登入：去登入頁
+      }
+    }
 
-                // 如果資料庫回傳錯誤，拋出異常
-                if (error) throw error;
+    // --- 載入資料 ---
+    async function loadVocabulary() {
+      const { data, error } = await supabaseClient.from('Korean_vocabulary').select('*');
+      if (error) return console.error(error);
+      
+      vocabulary = data;
+      document.getElementById('card-front').textContent = "點擊卡片翻面";
+      document.getElementById('card-back').textContent = "準備好了！";
+      renderAdminList();
+    }
 
-                // 將抓到的資料存入全域變數
-                vocabulary = data;
+    // --- 登入與登出 (簡化版) ---
+    async function handleLogin() {
+      const email = "admin@korean.com"; 
+      const password = document.getElementById('password-input').value;
+      const msgEl = document.getElementById('login-msg');
+      msgEl.textContent = "登入中...";
 
-                if (vocabulary.length === 0) {
-                    cardFront.textContent = "資料庫目前是空的";
-                    cardBack.textContent = "請至 Supabase 新增單字";
-                    return;
-                }
+      const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+      
+      if (error) {
+        msgEl.textContent = "密碼錯誤：" + error.message;
+      } else {
+        msgEl.textContent = "";
+        document.getElementById('password-input').value = '';
+        // 需求：登入完成後，應回到小卡頁面
+        switchView('flashcard-view'); 
+      }
+    }
 
-                generateBtn.disabled = false;
-                generateBtn.textContent = "生成詞彙";
-                cardFront.textContent = "點擊卡片翻面";
-                cardBack.textContent = "雲端資料庫連線成功！";
+    async function handleLogout() {
+      await supabaseClient.auth.signOut();
+      switchView('flashcard-view');
+    }
 
-            } catch (err) {
-                console.error('Supabase 載入失敗:', err.message);
-                cardFront.textContent = "載入失敗";
-                cardFront.style.color = "red";
-                cardBack.textContent = "請檢查 Console 錯誤訊息";
-            }
-        }
+    // --- CRUD 操作 ---
+    async function handleAddWord() {
+      const wordInput = document.getElementById('new-word');
+      const meaningInput = document.getElementById('new-meaning');
+      const word = wordInput.value.trim();
+      const meaning = meaningInput.value.trim();
 
-        // 點擊卡片翻面
-        flashcard.addEventListener('click', () => {
-            if (vocabulary.length > 0) flashcard.classList.toggle('is-flipped');
-        });
+      if (!word || !meaning) return alert("請輸入單字與解釋");
 
-        // 點擊生成詞彙
-        generateBtn.addEventListener('click', () => {
-            if (vocabulary.length === 0) return;
-            if (flashcard.classList.contains('is-flipped')) {
-                flashcard.classList.remove('is-flipped');
-                setTimeout(updateCardContent, 150); 
-            } else {
-                updateCardContent();
-            }
-        });
+      const { error } = await supabaseClient.from('Korean_vocabulary').insert([{ word, meaning }]);
+      
+      if (error) {
+        alert("新增失敗：" + error.message);
+      } else {
+        wordInput.value = ''; meaningInput.value = '';
+        await loadVocabulary();
+        alert("新增成功！");
+      }
+    }
 
-        function updateCardContent() {
-            const randomIndex = Math.floor(Math.random() * vocabulary.length);
-            const selectedItem = vocabulary[randomIndex];
-            if (lastVocabulary && selectedItem.id === lastVocabulary.id) {
-                return updateCardContent();
-            }
-            lastVocabulary = selectedItem;
-            cardFront.textContent = selectedItem.word;
-            cardBack.textContent = selectedItem.meaning;
-        }
+    async function handleDeleteWord(id) {
+      if (!confirm("確定要刪除這個單字嗎？")) return;
+      const { error } = await supabaseClient.from('Korean_vocabulary').delete().eq('id', id);
+      
+      if (error) {
+        alert("刪除失敗：" + error.message);
+      } else {
+        await loadVocabulary();
+      }
+    }
 
-        // 啟動！
-        loadVocabulary();
-    </script>
+    function renderAdminList() {
+      const listEl = document.getElementById('word-list');
+      listEl.innerHTML = ''; 
+      vocabulary.forEach(item => {
+        const li = document.createElement('li');
+        li.className = 'word-item';
+        li.innerHTML = `
+          <span><strong>${item.word}</strong>: ${item.meaning}</span>
+          <button class="danger" onclick="handleDeleteWord(${item.id})">刪除</button>
+        `;
+        listEl.appendChild(li);
+      });
+    }
 
+    // --- 抽卡邏輯 (已套用你的防重複程式碼) ---
+    const flashcard = document.getElementById('flashcard');
+    flashcard.addEventListener('click', () => {
+      if (vocabulary.length > 0) flashcard.classList.toggle('is-flipped');
+    });
+
+    document.getElementById('generate-btn').addEventListener('click', () => {
+      if (vocabulary.length === 0) return;
+      if (flashcard.classList.contains('is-flipped')) {
+        flashcard.classList.remove('is-flipped');
+        setTimeout(updateCardContent, 150); 
+      } else {
+        updateCardContent();
+      }
+    });
+
+    function updateCardContent() {
+      let randomIndex = Math.floor(Math.random() * vocabulary.length);
+      let selectedItem = vocabulary[randomIndex];
+      
+      while (lastVocabulary && vocabulary.length > 1 && selectedItem === lastVocabulary) {
+        randomIndex = Math.floor(Math.random() * vocabulary.length);
+        selectedItem = vocabulary[randomIndex];
+      }
+      
+      lastVocabulary = selectedItem;
+      document.getElementById('card-front').textContent = selectedItem.word;
+      document.getElementById('card-back').textContent = selectedItem.meaning;
+    }
+
+    // 啟動載入
+    loadVocabulary();
+  </script>
 </body>
 </html>
