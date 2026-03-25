@@ -3,87 +3,175 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Random Word Generator</title>
+    <title>Flashcard Lite</title>
     <style>
-        /* 重置基本樣式 */
         body, html {
-            margin: 0;
-            padding: 0;
-            height: 100%; /* 確保高度撐滿螢幕 */
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: #f8f9fa;
+            margin: 0; padding: 0; height: 100%;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: #f0f2f5; /* 稍微調深一點背景，凸顯白底卡片 */
         }
 
-        /* 核心：Flexbox 完美置中大法 */
         .container {
-            display: flex;
-            flex-direction: column;   /* 垂直排列 */
-            justify-content: center;  /* 主軸（垂直）置中 */
-            align-items: center;      /* 交叉軸（水平）置中 */
-            height: 100vh;            /* 佔滿整個視窗高度 (Viewport Height) */
+            display: flex; flex-direction: column;
+            justify-content: center; align-items: center;
+            height: 100vh; padding: 20px; box-sizing: border-box;
+        }
+
+        /* --- 3D 翻轉卡片核心 CSS 開始 --- */
+        .scene {
+            width: 320px;
+            height: 200px;
+            perspective: 800px; /* 創造 3D 深度視角 */
+            margin-bottom: 40px;
+        }
+
+        .card {
+            width: 100%; height: 100%;
+            position: relative;
+            transition: transform 0.6s cubic-bezier(0.4, 0.0, 0.2, 1); /* 讓翻轉動畫更自然 */
+            transform-style: preserve-3d; /* 讓子元素保留 3D 空間位置 */
+            cursor: pointer; /* 提示使用者可點擊 */
+        }
+
+        /* 當卡片加上 .is-flipped 類別時，Y軸旋轉 180 度 */
+        .card.is-flipped {
+            transform: rotateY(180deg);
+        }
+
+        /* 卡片的正反兩面共用設定 */
+        .card-face {
+            position: absolute;
+            width: 100%; height: 100%;
+            backface-visibility: hidden; /* 核心：轉到背面時隱藏元素 */
+            display: flex; justify-content: center; align-items: center;
+            border-radius: 16px;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+            background-color: white;
             padding: 20px;
             box-sizing: border-box;
+            text-align: center;
+            word-break: break-word;
         }
 
-        /* 詞彙顯示區 */
-        #display-area {
-            font-size: 2.5rem;
+        .card-front {
+            font-size: 2.2rem;
             font-weight: bold;
             color: #2c3e50;
-            margin-bottom: 40px;      /* 與按鈕保持距離 */
-            min-height: 3rem;         /* 給定最小高度，防止切換字詞時畫面跳動 */
-            text-align: center;
-            word-break: break-word;   /* 防止字串太長在手機上破版 */
         }
 
-        /* 陽春但俐落的按鈕 */
+        .card-back {
+            transform: rotateY(180deg); /* 背面一開始就是反的 */
+            font-size: 1.5rem;
+            color: #e74c3c;
+            background-color: #fff9f9; /* 背面給點微小的底色差異 */
+        }
+        /* --- 3D 翻轉卡片核心 CSS 結束 --- */
+
         button {
-            padding: 12px 32px;
-            font-size: 1.2rem;
-            cursor: pointer;
-            background-color: #0366d6;
-            color: white;
-            border: none;
-            border-radius: 6px;
+            padding: 14px 36px; font-size: 1.2rem; font-weight: bold;
+            cursor: pointer; background-color: #0366d6; color: white;
+            border: none; border-radius: 8px;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            transition: background-color 0.2s, transform 0.1s;
+            transition: all 0.2s;
         }
-
-        button:hover { background-color: #005cc5; }
-        button:active { transform: scale(0.96); } /* 點擊時的微小縮放回饋 */
+        button:hover { background-color: #005cc5; transform: translateY(-2px); }
+        button:active { transform: translateY(0); }
+        button:disabled { background-color: #95a5a6; cursor: not-allowed; transform: none; }
     </style>
 </head>
 <body>
-
     <div class="container">
-        <div id="display-area">請點擊下方按鈕</div>
+        <div class="scene">
+            <div id="flashcard" class="card">
+                <div id="card-front" class="card-face card-front">請點擊下方按鈕</div>
+                <div id="card-back" class="card-face card-back">這裡會顯示解釋</div>
+            </div>
+        </div>
+        
         <button id="generate-btn">生成詞彙</button>
     </div>
 
-    <script>
-        // 1. 自定義詞彙庫 (Library)
-        const vocabulary = [
-            "ArUco Marker", 
-            "OpenCV", 
-            "GitHub Pages", 
-            "Computer Vision", 
-            "Frontend Development",
-            "JavaScript",
-            "Matrix",
-            "Transformation"
-        ];
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-        // 2. 取得 DOM 元素
-        const displayArea = document.getElementById('display-area');
+    <script>
+        // 1. 初始化 Supabase 客戶端
+        const SUPABASE_URL = 'https://agylibdmnsbswwzburey.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFneWxpYmRtbnNic3d3emJ1cmV5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwNDQ2MDQsImV4cCI6MjA4OTYyMDYwNH0.cpjIyqggU3dv19_gmAs-u5FBW61yTJKENRlTdOB5xU8';
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        let vocabulary = [];
+        let lastVocabulary = null;
+
+        const flashcard = document.getElementById('flashcard');
+        const cardFront = document.getElementById('card-front');
+        const cardBack = document.getElementById('card-back');
         const generateBtn = document.getElementById('generate-btn');
 
-        // 3. 綁定按鈕點擊事件
-        generateBtn.addEventListener('click', () => {
-            // 產生 0 到 array.length - 1 的隨機整數
-            const randomIndex = Math.floor(Math.random() * vocabulary.length);
-            // 替換畫面文字
-            displayArea.textContent = vocabulary[randomIndex];
+        // 2. 改寫載入資料的函式，改成向 Supabase 要資料
+        async function loadVocabulary() {
+            try {
+                generateBtn.disabled = true;
+                generateBtn.textContent = "連線資料庫中...";
+
+                // 向 vocabulary 資料表執行 SELECT *
+                const { data, error } = await supabaseClient
+                    .from('Korean_vocabulary')
+                    .select('*');
+
+                // 如果資料庫回傳錯誤，拋出異常
+                if (error) throw error;
+
+                // 將抓到的資料存入全域變數
+                vocabulary = data;
+
+                if (vocabulary.length === 0) {
+                    cardFront.textContent = "資料庫目前是空的";
+                    cardBack.textContent = "請至 Supabase 新增單字";
+                    return;
+                }
+
+                generateBtn.disabled = false;
+                generateBtn.textContent = "生成詞彙";
+                cardFront.textContent = "點擊卡片翻面";
+                cardBack.textContent = "雲端資料庫連線成功！";
+
+            } catch (err) {
+                console.error('Supabase 載入失敗:', err.message);
+                cardFront.textContent = "載入失敗";
+                cardFront.style.color = "red";
+                cardBack.textContent = "請檢查 Console 錯誤訊息";
+            }
+        }
+
+        // 點擊卡片翻面
+        flashcard.addEventListener('click', () => {
+            if (vocabulary.length > 0) flashcard.classList.toggle('is-flipped');
         });
+
+        // 點擊生成詞彙
+        generateBtn.addEventListener('click', () => {
+            if (vocabulary.length === 0) return;
+            if (flashcard.classList.contains('is-flipped')) {
+                flashcard.classList.remove('is-flipped');
+                setTimeout(updateCardContent, 150); 
+            } else {
+                updateCardContent();
+            }
+        });
+
+        function updateCardContent() {
+            const randomIndex = Math.floor(Math.random() * vocabulary.length);
+            const selectedItem = vocabulary[randomIndex];
+            if (lastVocabulary && selectedItem.id === lastVocabulary.id) {
+                return updateCardContent();
+            }
+            lastVocabulary = selectedItem;
+            cardFront.textContent = selectedItem.word;
+            cardBack.textContent = selectedItem.meaning;
+        }
+
+        // 啟動！
+        loadVocabulary();
     </script>
 
 </body>
