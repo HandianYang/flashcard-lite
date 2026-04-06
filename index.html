@@ -10,7 +10,7 @@
     .view-section { display: none; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; box-sizing: border-box; }
     .view-section.active { display: flex; }
 
-    .scene { width: 320px; height: 200px; perspective: 800px; margin-bottom: 40px; }
+    .scene { width: 320px; height: 200px; perspective: 800px; margin-bottom: 20px; }
     .card { width: 100%; height: 100%; position: relative; transition: transform 0.6s; transform-style: preserve-3d; cursor: pointer; }
     .card.is-flipped { transform: rotateY(180deg); }
     .card-face { position: absolute; width: 100%; height: 100%; backface-visibility: hidden; display: flex; justify-content: center; align-items: center; border-radius: 16px; box-shadow: 0 8px 16px rgba(0,0,0,0.1); background-color: white; padding: 20px; box-sizing: border-box; text-align: center; word-break: break-word; }
@@ -21,27 +21,49 @@
     button:hover { background-color: #005cc5; }
     button.danger { background-color: #dc3545; }
     button.danger:hover { background-color: #c82333; }
-    input { padding: 10px; margin: 5px; border: 1px solid #ccc; border-radius: 4px; font-size: 1rem; }
+    button:disabled { background-color: #95a5a6; cursor: not-allowed; }
     
-    .admin-panel { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); width: 100%; max-width: 400px; margin-bottom: 20px;}
+    /* 修正 input 選擇器，避免影響 radio 和 checkbox */
+    input[type="text"], input[type="password"] { padding: 10px; margin: 5px; border: 1px solid #ccc; border-radius: 4px; font-size: 1rem; }
+    input[type="radio"], input[type="checkbox"] { margin-right: 6px; cursor: pointer; }
+    
+    .admin-panel { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); width: 100%; max-width: 450px; margin-bottom: 20px;}
     .word-list { list-style: none; padding: 0; max-height: 300px; overflow-y: auto; }
     .word-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #eee; }
+    .tag-badge { background-color: #e1ecf4; color: #39739d; font-size: 0.8rem; padding: 2px 6px; border-radius: 4px; margin-right: 5px; }
     
     .admin-trigger { position: fixed; bottom: 10px; right: 10px; font-size: 0.9rem; color: #666; cursor: pointer; border: none; background: #e0e0e0; border-radius: 20px; padding: 8px 16px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-    .admin-trigger:hover { background: #d0d0d0; transform: none; }
+    .admin-trigger:hover { background: #d0d0d0; }
+
+    /* --- 新增：結構化標籤篩選器 UI --- */
+    .filter-container { margin-top: 20px; background: white; padding: 15px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); width: 100%; max-width: 400px; }
+    .filter-title { font-size: 0.95rem; color: #333; margin-bottom: 10px; font-weight: bold; text-align: center; border-bottom: 1px solid #eee; padding-bottom: 8px;}
+    .tag-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 8px; padding: 8px 10px; background: #f8f9fa; border-radius: 6px; }
+    .tag-row label.pos-label { color: #2c3e50; min-width: 70px; display: flex; align-items: center; font-size: 0.95rem; cursor: pointer; }
+    .tag-row label.sub-tag-label { font-size: 0.85rem; color: #555; cursor: pointer; display: flex; align-items: center; transition: opacity 0.2s; }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
 
   <div id="flashcard-view" class="view-section active">
+    
     <div class="scene">
       <div id="flashcard" class="card">
         <div id="card-front" class="card-face card-front">載入中...</div>
         <div id="card-back" class="card-face card-back">請稍候</div>
       </div>
     </div>
+    
     <button id="generate-btn">生成詞彙</button>
+
+    <div class="filter-container">
+      <div class="filter-title">📚 選擇出題範圍</div>
+      <div id="tag-filters">
+        <span style="font-size: 0.8rem; color: #999; display: block; text-align: center;">載入中...</span>
+      </div>
+    </div>
+
     <button id="admin-trigger-btn" class="admin-trigger" onclick="handleAdminTrigger()">⚙️ 管理員登入</button>
   </div>
 
@@ -62,6 +84,7 @@
       <h3>新增韓文單字</h3>
       <input type="text" id="new-word" placeholder="韓文單字" style="width: 90%;">
       <input type="text" id="new-meaning" placeholder="中文解釋" style="width: 90%;">
+      <input type="text" id="new-tags" placeholder="標籤 (首項為詞性，後為類別，如: 名詞,食物類)" style="width: 90%;">
       <button onclick="handleAddWord()">新增</button>
     </div>
 
@@ -77,27 +100,25 @@
   </div>
 
   <script>
-    const SUPABASE_URL = 'https://agylibdmnsbswwzburey.supabase.co';
-    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFneWxpYmRtbnNic3d3emJ1cmV5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwNDQ2MDQsImV4cCI6MjA4OTYyMDYwNH0.cpjIyqggU3dv19_gmAs-u5FBW61yTJKENRlTdOB5xU8'; // 替換為你的 Key
+    const SUPABASE_URL = 'https://agylibdmnsbswwzburey.supabase.co'; 
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFneWxpYmRtbnNic3d3emJ1cmV5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwNDQ2MDQsImV4cCI6MjA4OTYyMDYwNH0.cpjIyqggU3dv19_gmAs-u5FBW61yTJKENRlTdOB5xU8'; 
     const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     let vocabulary = [];
-    let lastVocabulary = null; // 防重複機制變數
-    let isLoggedIn = false;    // 狀態追蹤變數
+    let filteredVocabulary = []; 
+    let lastVocabulary = null;   
+    let isLoggedIn = false;      
 
-    // --- 核心：監聽登入狀態 ---
+    // 動態標籤結構： { "名詞": Set(["食物類", "動物類"]), "動詞": Set(["原形", "現在式"]) }
+    let tagMap = new Map();
+    let hasUntagged = false;
+
     supabaseClient.auth.onAuthStateChange((event, session) => {
-      isLoggedIn = !!session; // 將 session 轉為布林值
+      isLoggedIn = !!session; 
       const triggerBtn = document.getElementById('admin-trigger-btn');
-      
-      if (isLoggedIn) {
-        triggerBtn.textContent = "⚙️ 管理詞彙庫";
-      } else {
-        triggerBtn.textContent = "⚙️ 管理員登入";
-      }
+      triggerBtn.textContent = isLoggedIn ? "⚙️ 管理詞彙庫" : "⚙️ 管理員登入";
     });
 
-    // --- 視圖切換與路由邏輯 ---
     function switchView(viewId) {
       document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
       document.getElementById(viewId).classList.add('active');
@@ -105,25 +126,165 @@
     }
 
     function handleAdminTrigger() {
-      if (isLoggedIn) {
-        switchView('admin-view'); // 已登入：直接進後台，免密碼
-      } else {
-        switchView('login-view'); // 未登入：去登入頁
-      }
+      if (isLoggedIn) switchView('admin-view'); 
+      else switchView('login-view'); 
     }
 
-    // --- 載入資料 ---
     async function loadVocabulary() {
       const { data, error } = await supabaseClient.from('Korean_vocabulary').select('*');
       if (error) return console.error(error);
       
       vocabulary = data;
-      document.getElementById('card-front').textContent = "點擊卡片翻面";
-      document.getElementById('card-back').textContent = "準備好了！";
-      renderAdminList();
+      extractAndRenderTags(); 
     }
 
-    // --- 登入與登出 (簡化版) ---
+    // --- 核心：解析標籤並渲染結構化 UI ---
+    function extractAndRenderTags() {
+      tagMap.clear();
+      hasUntagged = false;
+
+      // 解析邏輯：約定 [0] 是詞性，[1...] 是類別/時態
+      vocabulary.forEach(item => {
+        if (item.tags && item.tags.trim() !== '') {
+          const parts = item.tags.split(',').map(t => t.trim()).filter(t => t !== '');
+          if (parts.length > 0) {
+            const pos = parts[0]; // 第一項當作詞性
+            if (!tagMap.has(pos)) tagMap.set(pos, new Set());
+            for (let i = 1; i < parts.length; i++) {
+              tagMap.get(pos).add(parts[i]); // 後續項當作子標籤
+            }
+          } else {
+            hasUntagged = true;
+          }
+        } else {
+          hasUntagged = true;
+        }
+      });
+
+      const container = document.getElementById('tag-filters');
+      container.innerHTML = '';
+
+      if (tagMap.size === 0 && !hasUntagged) {
+        container.innerHTML = '<span style="font-size: 0.8rem; color: #888; display:block; text-align:center;">尚未建立任何單字</span>';
+        applyFilters();
+        return;
+      }
+
+      // 1. 渲染「全部」選項
+      const allRow = document.createElement('div');
+      allRow.className = 'tag-row';
+      allRow.style.justifyContent = 'center';
+      allRow.innerHTML = `
+        <label class="pos-label">
+          <input type="radio" name="pos-filter" value="ALL" checked onchange="applyFilters()"> <strong>✨ 全部單字</strong>
+        </label>
+      `;
+      container.appendChild(allRow);
+
+      // 2. 動態渲染各個詞性與其子標籤
+      tagMap.forEach((subTagsSet, pos) => {
+        const row = document.createElement('div');
+        row.className = 'tag-row';
+        
+        let html = `
+          <label class="pos-label">
+            <input type="radio" name="pos-filter" value="${pos}" onchange="applyFilters()"> <strong>${pos}</strong>
+          </label>
+        `;
+        
+        // 將該詞性下的所有子類別生成 checkbox
+        subTagsSet.forEach(sub => {
+          html += `
+            <label class="sub-tag-label">
+              <input type="checkbox" class="sub-tag-cb" data-pos="${pos}" value="${sub}" onchange="applyFilters()"> ${sub}
+            </label>
+          `;
+        });
+        
+        row.innerHTML = html;
+        container.appendChild(row);
+      });
+
+      // 3. 如果有未標籤的單字，提供獨立選項
+      if (hasUntagged) {
+        const untaggedRow = document.createElement('div');
+        untaggedRow.className = 'tag-row';
+        untaggedRow.innerHTML = `
+          <label class="pos-label">
+            <input type="radio" name="pos-filter" value="UNTAGGED" onchange="applyFilters()"> <strong>未分類單字</strong>
+          </label>
+        `;
+        container.appendChild(untaggedRow);
+      }
+
+      applyFilters(); 
+    }
+
+    // --- 核心：套用 AND 過濾邏輯 ---
+    function applyFilters() {
+      const selectedRadio = document.querySelector('input[name="pos-filter"]:checked');
+      if (!selectedRadio) return;
+      const selectedPos = selectedRadio.value;
+
+      // UI 互動：只啟用目前所選「詞性」的 checkbox，其他灰底禁用
+      document.querySelectorAll('.sub-tag-cb').forEach(cb => {
+        if (cb.dataset.pos === selectedPos) {
+          cb.disabled = false;
+          cb.parentElement.style.opacity = '1';
+        } else {
+          cb.disabled = true;
+          cb.checked = false; // 自動取消勾選非該詞性的類別
+          cb.parentElement.style.opacity = '0.4';
+        }
+      });
+
+      // 取得目前詞性下，被勾選的子標籤 (Array)
+      const selectedSubTags = Array.from(document.querySelectorAll(`.sub-tag-cb[data-pos="${selectedPos}"]:checked`)).map(cb => cb.value);
+
+      // 執行陣列過濾
+      filteredVocabulary = vocabulary.filter(item => {
+        if (selectedPos === 'ALL') return true;
+
+        const itemTags = (item.tags && item.tags.trim() !== '') ? item.tags.split(',').map(t => t.trim()).filter(t => t !== '') : [];
+
+        if (selectedPos === 'UNTAGGED') return itemTags.length === 0;
+
+        // 【條件 1】: 單字的第一個標籤必須是選定的詞性
+        const wordPos = itemTags.length > 0 ? itemTags[0] : null;
+        if (wordPos !== selectedPos) return false;
+
+        // 【條件 2 (AND 邏輯)】: 如果使用者有勾選子標籤，單字必須至少包含其中一個
+        // (如果使用者沒勾選任何子標籤，預設為全出該詞性)
+        if (selectedSubTags.length > 0) {
+          const hasSubTag = selectedSubTags.some(sub => itemTags.includes(sub));
+          if (!hasSubTag) return false;
+        }
+
+        return true;
+      });
+
+      // 更新介面文字與按鈕狀態
+      const cardFront = document.getElementById('card-front');
+      const cardBack = document.getElementById('card-back');
+      const generateBtn = document.getElementById('generate-btn');
+
+      if (document.getElementById('flashcard').classList.contains('is-flipped')) {
+        document.getElementById('flashcard').classList.remove('is-flipped');
+      }
+
+      if (filteredVocabulary.length === 0) {
+        cardFront.textContent = "無符合條件的單字";
+        cardBack.textContent = "請重新勾選上方的出題範圍";
+        generateBtn.disabled = true;
+      } else {
+        cardFront.textContent = "點擊卡片翻面";
+        cardBack.textContent = `當前範圍：${filteredVocabulary.length} 個單字`;
+        generateBtn.disabled = false;
+      }
+      
+      lastVocabulary = null; 
+    }
+
     async function handleLogin() {
       const email = "admin@korean.com"; 
       const password = document.getElementById('password-input').value;
@@ -131,13 +292,11 @@
       msgEl.textContent = "登入中...";
 
       const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
-      
       if (error) {
         msgEl.textContent = "密碼錯誤：" + error.message;
       } else {
         msgEl.textContent = "";
         document.getElementById('password-input').value = '';
-        // 需求：登入完成後，應回到小卡頁面
         switchView('flashcard-view'); 
       }
     }
@@ -147,21 +306,23 @@
       switchView('flashcard-view');
     }
 
-    // --- CRUD 操作 ---
     async function handleAddWord() {
       const wordInput = document.getElementById('new-word');
       const meaningInput = document.getElementById('new-meaning');
+      const tagsInput = document.getElementById('new-tags'); 
+      
       const word = wordInput.value.trim();
       const meaning = meaningInput.value.trim();
+      const tags = tagsInput.value.trim();
 
       if (!word || !meaning) return alert("請輸入單字與解釋");
 
-      const { error } = await supabaseClient.from('Korean_vocabulary').insert([{ word, meaning }]);
+      const { error } = await supabaseClient.from('Korean_vocabulary').insert([{ word, meaning, tags }]);
       
       if (error) {
         alert("新增失敗：" + error.message);
       } else {
-        wordInput.value = ''; meaningInput.value = '';
+        wordInput.value = ''; meaningInput.value = ''; tagsInput.value = '';
         await loadVocabulary();
         alert("新增成功！");
       }
@@ -170,12 +331,8 @@
     async function handleDeleteWord(id) {
       if (!confirm("確定要刪除這個單字嗎？")) return;
       const { error } = await supabaseClient.from('Korean_vocabulary').delete().eq('id', id);
-      
-      if (error) {
-        alert("刪除失敗：" + error.message);
-      } else {
-        await loadVocabulary();
-      }
+      if (error) alert("刪除失敗：" + error.message);
+      else await loadVocabulary();
     }
 
     function renderAdminList() {
@@ -184,22 +341,38 @@
       vocabulary.forEach(item => {
         const li = document.createElement('li');
         li.className = 'word-item';
+        
+        let tagsHtml = '';
+        if (item.tags && item.tags.trim() !== '') {
+          const tagArray = item.tags.split(',').map(t => t.trim());
+          // 將第一個標籤(詞性)用不同顏色標示
+          tagsHtml = tagArray.map((t, index) => {
+            const bg = index === 0 ? '#ffeeba' : '#e1ecf4';
+            const color = index === 0 ? '#856404' : '#39739d';
+            return `<span class="tag-badge" style="background:${bg}; color:${color};">${t}</span>`;
+          }).join('');
+        } else {
+          tagsHtml = `<span class="tag-badge" style="background:#eee;color:#888;">未分類</span>`;
+        }
+
         li.innerHTML = `
-          <span><strong>${item.word}</strong>: ${item.meaning}</span>
+          <div style="flex-grow: 1;">
+            <div style="margin-bottom: 5px;"><strong>${item.word}</strong>: ${item.meaning}</div>
+            <div>${tagsHtml}</div>
+          </div>
           <button class="danger" onclick="handleDeleteWord(${item.id})">刪除</button>
         `;
         listEl.appendChild(li);
       });
     }
 
-    // --- 抽卡邏輯 (已套用你的防重複程式碼) ---
     const flashcard = document.getElementById('flashcard');
     flashcard.addEventListener('click', () => {
-      if (vocabulary.length > 0) flashcard.classList.toggle('is-flipped');
+      if (filteredVocabulary.length > 0) flashcard.classList.toggle('is-flipped');
     });
 
     document.getElementById('generate-btn').addEventListener('click', () => {
-      if (vocabulary.length === 0) return;
+      if (filteredVocabulary.length === 0) return;
       if (flashcard.classList.contains('is-flipped')) {
         flashcard.classList.remove('is-flipped');
         setTimeout(updateCardContent, 150); 
@@ -209,12 +382,12 @@
     });
 
     function updateCardContent() {
-      let randomIndex = Math.floor(Math.random() * vocabulary.length);
-      let selectedItem = vocabulary[randomIndex];
+      let randomIndex = Math.floor(Math.random() * filteredVocabulary.length);
+      let selectedItem = filteredVocabulary[randomIndex];
       
-      while (lastVocabulary && vocabulary.length > 1 && selectedItem === lastVocabulary) {
-        randomIndex = Math.floor(Math.random() * vocabulary.length);
-        selectedItem = vocabulary[randomIndex];
+      while (lastVocabulary && filteredVocabulary.length > 1 && selectedItem === lastVocabulary) {
+        randomIndex = Math.floor(Math.random() * filteredVocabulary.length);
+        selectedItem = filteredVocabulary[randomIndex];
       }
       
       lastVocabulary = selectedItem;
@@ -222,7 +395,6 @@
       document.getElementById('card-back').textContent = selectedItem.meaning;
     }
 
-    // 啟動載入
     loadVocabulary();
   </script>
 </body>
